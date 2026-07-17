@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Procesul de design interior</title>
+
+<!-- Editorial type pairing: a condensed serif for structure, a mono for editorial "caption" voice -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- NOTE: Google Fonts' "Noto Serif Condensed" family only ships Regular (400)
+     and Bold (700) — it has no Light weight at all. To get a genuine light,
+     condensed heading we load the variable "Noto Serif" family instead
+     (true wght axis, 100–900) and set the condensed proportions ourselves
+     via font-stretch, which the variable font file supports. -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,300;0,400;0,500;0,600;0,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+
+  /* ============================================================
+     0. TOKENS
+     Palette, type and spacing are declared once and reused
+     everywhere. Nothing in this file is a "magic number".
+     ============================================================ */
+  :root{
+    --card:        #903d2c;   /* terracotta — the studio's signature clay tone */
+    --ink:         #f9f9f9;   /* text on cards, and the connecting line        */
+    --line-track:  rgba(144, 61, 44, 0.18);  /* faint hairline rail, always visible */
+    --radius:      10px;
+
+    --serif: 'Noto Serif', serif;
+    --serif-stretch: 75%;   /* condensed width, drawn from the variable font's wdth axis */
+    --mono:  'Space Mono', monospace;
+
+    --gap-desktop: clamp(64px, 9vw, 112px);   /* space between steps    */
+    --gap-mobile:  56px;
+    --card-max:    380px;
+    --stub:        52px;      /* length of the horizontal connector    */
+    --node-gap:    16px;      /* the "pause" between line and connector*/
+    --node-size:   9px;
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* ============================================================
+     1. RESET — kept minimal on purpose
+     ============================================================ */
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{
+    margin:0;
+    padding:0;
+    background:transparent;      /* the component carries no page background   */
+    height:auto;                 /* let the iframe measure real content height */
+  }
+  body{
+    font-family: var(--mono);
+    color:#2b2b2b;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  ol,li{ margin:0; padding:0; list-style:none; }
+  h2,h3,p{ margin:0; }
+
+  /* ============================================================
+     2. SECTION FRAME
+     ============================================================ */
+  .roadmap{
+    position:relative;
+    max-width:1080px;
+    margin:0 auto;
+    padding: clamp(48px, 8vw, 96px) 24px 40px;
+  }
+
+  .roadmap__intro{
+    max-width:620px;
+    margin: 0 auto clamp(56px, 9vw, 104px);
+    text-align:center;
+  }
+  .roadmap__eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:0.28em;
+    text-transform:uppercase;
+    color:#903d2c;
+    margin-bottom:16px;
+  }
+  .roadmap__title{
+    font-family:var(--serif);
+    font-stretch:var(--serif-stretch);
+    font-weight:300;
+    font-size:clamp(30px, 4.2vw, 44px);
+    line-height:1.15;
+    letter-spacing:0.005em;
+    color:#1c1c1c;
+    margin-bottom:14px;
+  }
+  .roadmap__subtitle{
+    font-family:var(--mono);
+    font-size:13.5px;
+    line-height:1.7;
+    color:#5c5c5c;
+  }
+
+  /* ============================================================
+     3. THE VERTICAL LINE
+     A static hairline "track" plus a fill that grows as the
+     visitor scrolls — the fill is what represents progress.
+     ============================================================ */
+  .roadmap__line{
+    position:absolute;
+    top:0; bottom:0;
+    left:50%;
+    width:1px;
+    background:var(--line-track);
+    transform:translateX(-50%);
+  }
+  .roadmap__line-fill{
+    position:absolute;
+    top:0; left:0;
+    width:100%;
+    height:0px;                 /* animated by JS as steps reveal   */
+    background:var(--ink);
+    box-shadow: 0 0 0 0.5px rgba(144,61,44,0.35); /* hairline edge, not a drop-shadow */
+    transition:height 1.05s var(--ease);
+  }
+
+  /* ============================================================
+     4. STEP LIST
+     Desktop: two columns, alternating left / right of the line.
+     ============================================================ */
+  .roadmap__list{
+    position:relative;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    row-gap:var(--gap-desktop);
+    column-gap:0;
+  }
+
+  .roadmap__step{
+    position:relative;
+    display:flex;
+    opacity:0;
+    transform:translateY(20px);
+    transition:opacity 0.9s var(--ease), transform 0.9s var(--ease);
+  }
+  html.js .roadmap__step.is-visible{ opacity:1; transform:translateY(0); }
+  /* No JS / no observer support → content is simply visible, no penalty */
+  html:not(.js) .roadmap__step{ opacity:1; transform:none; }
+
+  .roadmap__step--left{
+    grid-column:1;
+    justify-content:flex-end;
+    padding-right: calc(var(--node-size) + var(--node-gap) + var(--stub));
+  }
+  .roadmap__step--right{
+    grid-column:2;
+    justify-content:flex-start;
+    padding-left: calc(var(--node-size) + var(--node-gap) + var(--stub));
+  }
+
+  /* Node — the small "pause" mark sitting exactly on the line */
+  .roadmap__node{
+    position:absolute;
+    top:50%;
+    width:var(--node-size);
+    height:var(--node-size);
+    border-radius:50%;
+    background:var(--ink);
+    box-shadow:0 0 0 0.5px rgba(144,61,44,0.35);
+    transform:translateY(-50%);
+  }
+  .roadmap__step--left  .roadmap__node{ right:calc(-1 * var(--node-size) / 2); }
+  .roadmap__step--right .roadmap__node{ left:calc(-1 * var(--node-size) / 2); }
+
+  /* Connector — a short stub that picks the line back up into the card */
+  .roadmap__connector{
+    position:absolute;
+    top:50%;
+    height:1px;
+    width:var(--stub);
+    background:var(--ink);
+    transform:translateY(-50%);
+  }
+  .roadmap__step--left  .roadmap__connector{ right:calc(var(--node-size) + var(--node-gap)); }
+  .roadmap__step--right .roadmap__connector{ left:calc(var(--node-size) + var(--node-gap)); }
+
+  /* ============================================================
+     5. THE CARD
+     ============================================================ */
+  .roadmap__card{
+    position:relative;
+    width:100%;
+    max-width:var(--card-max);
+    background:var(--card);
+    color:var(--ink);
+    border-radius:var(--radius);
+    padding: 34px 36px 32px;
+  }
+
+  .roadmap__number{
+    display:block;
+    font-family:var(--serif);
+    font-stretch:var(--serif-stretch);
+    font-weight:500;
+    font-size:13px;
+    letter-spacing:0.24em;
+    color: rgba(249,249,249,0.72);
+    margin-bottom:14px;
+  }
+  .roadmap__heading{
+    font-family:var(--serif);
+    font-stretch:var(--serif-stretch);
+    font-weight:300;
+    font-size:clamp(21px, 2.2vw, 25px);
+    line-height:1.25;
+    letter-spacing:0.005em;
+    margin-bottom:14px;
+  }
+  .roadmap__text{
+    font-family:var(--mono);
+    font-size:13px;
+    line-height:1.75;
+    color:rgba(249,249,249,0.88);
+  }
+
+  /* Ghost folio numeral — the signature editorial device.
+     Purely typographic (outline text), never a background/shadow. */
+  .roadmap__ghost{
+    position:absolute;
+    top:-0.42em;
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:clamp(64px, 7vw, 96px);
+    line-height:1;
+    color:transparent;
+    -webkit-text-stroke:1px rgba(144,61,44,0.28);
+    pointer-events:none;
+    user-select:none;
+    z-index:-1;
+  }
+  .roadmap__step--left  .roadmap__ghost{ right:calc(100% + 18px); }
+  .roadmap__step--right .roadmap__ghost{ left:calc(100% + 18px); }
+
+  /* ============================================================
+     6. MOBILE — single centered column, line on the left
+     ============================================================ */
+  @media (max-width:760px){
+    .roadmap{ padding: 40px 20px 24px; }
+    .roadmap__line{ left:20px; }
+
+    .roadmap__list{
+      grid-template-columns:1fr;
+      row-gap:var(--gap-mobile);
+    }
+    .roadmap__step,
+    .roadmap__step--left,
+    .roadmap__step--right{
+      grid-column:1;
+      justify-content:flex-start;
+      padding-left: calc(20px + var(--node-size) + var(--node-gap) + 28px);
+      padding-right:0;
+    }
+    .roadmap__step--left .roadmap__node,
+    .roadmap__step--right .roadmap__node{
+      left:calc(20px - (var(--node-size) / 2));
+      right:auto;
+    }
+    .roadmap__step--left .roadmap__connector,
+    .roadmap__step--right .roadmap__connector{
+      left:calc(20px + var(--node-size) + var(--node-gap));
+      right:auto;
+      width:28px;
+    }
+    .roadmap__card{ max-width:100%; padding:28px 24px 26px; }
+    .roadmap__ghost{ display:none; } /* keeps the small screen calm and legible */
+  }
+
+  /* ============================================================
+     7. MOTION PREFERENCE
+     ============================================================ */
+  @media (prefers-reduced-motion: reduce){
+    .roadmap__step{ transition:none; opacity:1; transform:none; }
+    .roadmap__line-fill{ transition:none; }
+  }
+
+</style>
+</head>
+<body>
+
+<section class="roadmap" aria-label="Etapele unui proiect complet de design interior">
+
+  <div class="roadmap__intro">
+    <p class="roadmap__eyebrow">Procesul</p>
+    <h2 class="roadmap__title">Șapte etape, un singur fir conducător</h2>
+    <p class="roadmap__subtitle">De la prima conversație până la fotografia finală, fiecare proiect urmează un parcurs clar și atent construit.</p>
+  </div>
+
+  <!-- The continuous vertical line: a static track + an animated fill -->
+  <div class="roadmap__line" aria-hidden="true">
+    <div class="roadmap__line-fill" id="lineFill"></div>
+  </div>
+
+  <ol class="roadmap__list" id="roadmapList">
+
+    <li class="roadmap__step roadmap__step--left">
+      <span class="roadmap__ghost" aria-hidden="true">01</span>
+      <span class="roadmap__node" aria-hidden="true"></span>
+      <span class="roadmap__connector" aria-hidden="true"></span>
+      <div class="roadmap__card">
+        <span class="roadmap__number">STEP 01</span>
+        <h3 class="roadmap__heading">Discovery</h3>
+        <p class="roadmap__text">Punem bazele proiectului prin înțelegerea nevoilor, dorințelor și priorităților tale.</p>
+      </div>
+    </li>
+
+    <li class="roadmap__step roadmap__step--right">
+      <span class="roadmap__ghost" aria-hidden="true">02</span>
+      <span class="roadmap__node" aria-hidden="true"></span>
+      <span class="roadmap__connector" aria-hidden="true"></span>
+      <div class="roadmap__card">
+        <span class="roadmap__number">STEP 02</span>
+        <h3 class="roadmap__heading">Concept</h3>
+        <p class="roadmap__text">Conceptul prinde contur prin schițe, planuri, moodboarduri și randări.</p>
+      </div>
+    </li>
+
+    <li class="roadmap__step roadmap__step--left">
+      <span class="roadmap__ghost" aria-hidden="true">03</span>
+      <span class="roadmap__node" aria-hidden="true"></span>
+      <span class="roadmap__connector" aria-hidden="true"></span>
+      <div class="roadmap__card">
+        <span class="roadmap__number">STEP 03</span>
+        <h3 class="roadmap__heading">Selecția și confirmarea produselor</h3>
+        <p class="roadmap__text">Confirmăm produsele și finisajele în showroom și prin analiza mostrelor.</p>
+      </div>
+    </li>
+
+    <li class="roadmap__step roadmap__step--right">
+      <span class="roadmap__ghost" aria-hidden="true">04</span>
+      <span class="roadmap__node" aria-hidden="true"></span>
+      <span class="roadmap__connector" aria-hidden="true"></span>
+      <div class="roadmap__card">
+        <span class="roadmap__number">STEP 04</span>
+        <h3 class="roadmap__heading">Coordonare tehnică</h3>
+        <p class="roadmap__text">Integrez produsele confirmate în documentația tehnică și pregătesc planșele pentru execuție.</p>
+      </div>
+    </li>
+
+    <li class="roadmap__step roadmap__step--left">
+      <span class="roadmap__ghost" aria-hidden="true">05</span>
+      <span class="roadmap__node" aria-hidden="true"></span>
+      <span class="roadmap__connector" aria-hidden="true"></span>
+      <div class="roadmap__card">
+        <span class="roadmap__number">STEP 05</span>
+        <h3 class="roadmap__heading">Managementul achizițiilor</h3>
+        <p class="roadmap__text">Coordonez ofertele, comenzile și relația cu furnizorii, în acord cu ritmul implementării.</p>
+      </div>
+    </li>
+
+    <li class="roadmap__step roadmap__step--right">
+      <span class="roadmap__ghost" aria-hidden="true">06</span>
+      <span class="roadmap__node" aria-hidden="true"></span>
+      <span class="roadmap__connector" aria-hidden="true"></span>
+      <div class="roadmap__card">
+        <span class="roadmap__number">STEP 06</span>
+        <h3 class="roadmap__heading">Asistență de șantier</h3>
+        <p class="roadmap__text">Ofer sprijin și clarificări pe parcursul implementării.</p>
+      </div>
+    </li>
+
+    <li class="roadmap__step roadmap__step--left">
+      <span class="roadmap__ghost" aria-hidden="true">07</span>
+      <span class="roadmap__node" aria-hidden="true"></span>
+      <span class="roadmap__connector" aria-hidden="true"></span>
+      <div class="roadmap__card">
+        <span class="roadmap__number">STEP 07</span>
+        <h3 class="roadmap__heading">Fotografierea proiectului</h3>
+        <p class="roadmap__text">Documentăm profesional rezultatul final al proiectului.</p>
+      </div>
+    </li>
+
+  </ol>
+</section>
+
+<script>
+(function(){
+  "use strict";
+
+  // Progressive enhancement: only animate if JS actually runs.
+  document.documentElement.classList.add('js');
+
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var line   = document.getElementById('lineFill');
+  var list   = document.getElementById('roadmapList');
+  var steps  = Array.prototype.slice.call(document.querySelectorAll('.roadmap__step'));
+  var nodes  = Array.prototype.slice.call(document.querySelectorAll('.roadmap__node'));
+
+  if (reduceMotion) {
+    // Show everything immediately, line fully drawn, no motion.
+    steps.forEach(function(s){ s.classList.add('is-visible'); });
+    line.style.height = list.offsetHeight + 'px';
+    return;
+  }
+
+  if (!('IntersectionObserver' in window)) {
+    // No observer support: fail gracefully to a fully visible state.
+    steps.forEach(function(s){ s.classList.add('is-visible'); });
+    line.style.height = list.offsetHeight + 'px';
+    return;
+  }
+
+  // --- 1. Fade + rise each card in as it enters the viewport ---------
+  var cardObserver = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-visible');
+        cardObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' });
+
+  steps.forEach(function(s){ cardObserver.observe(s); });
+
+  // --- 2. Grow the connecting line up to each node as it's reached ---
+  var lineObserver = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting) {
+        var target = entry.target.offsetTop + (entry.target.offsetHeight / 2) - list.offsetTop;
+        line.style.height = Math.max(parseFloat(line.style.height) || 0, target) + 'px';
+        lineObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.5, rootMargin: '0px 0px -10% 0px' });
+
+  nodes.forEach(function(n){ lineObserver.observe(n); });
+
+  // --- 3. Best-effort height reporting for the Google Sites iframe ---
+  // Cross-origin iframes can't be auto-resized without cooperation from
+  // the parent page, so this simply posts the document height in case
+  // a resize listener is ever added on the Sites side. Harmless no-op
+  // otherwise — the layout itself has no fixed heights.
+  function reportHeight(){
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type:'roadmap-height', height: document.documentElement.scrollHeight }, '*');
+    }
+  }
+  window.addEventListener('load', reportHeight);
+  window.addEventListener('resize', reportHeight);
+  if ('ResizeObserver' in window) {
+    new ResizeObserver(reportHeight).observe(document.body);
+  }
+
+})();
+</script>
+
+</body>
+</html>
